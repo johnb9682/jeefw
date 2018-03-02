@@ -83,11 +83,13 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 //		result.put("working pregress", "create function Return valid response to slack");
 //		result.put("other", "0.5.9 ");
 //		result.put("working pregress", "delete function with correct response show to user");
-		result.put("other", "0.6.3 ");
+		result.put("other", "0.6.5 ");
 		result.put("working pregress", "Edit function");
 //		result.put("working pregress", "Edit function provide recegnized response");
 //		result.put("other", "0.7.0 ");
 //		result.put("working pregress", "Clean up"); 
+//		result.put("working pregress", "Clean up Delete System out. prepare log class"); 
+//		result.put("working pregress", "Clean up Provide a staic class contain all printout text"); 
 //		delete system
 //	    update function in service layer
 		response.setStatus(HttpServletResponse.SC_OK);
@@ -196,6 +198,12 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 		deleteAction.put("name", "delete");
 		deleteAction.put("text", "Delete answer");
 		deleteAction.put("type", "button");
+		JSONObject deleteConfirmDialog = new JSONObject();
+		deleteConfirmDialog.put("title", "Confirmation");
+		deleteConfirmDialog.put("text", "Are you sure you want to delete this answer? This action can not be undone.");
+		deleteConfirmDialog.put("ok_text", "Delete");
+		deleteConfirmDialog.put("dismiss_text", "Cancel");
+		deleteAction.put("confirm", deleteConfirmDialog);
 //		JSONObject deleteActionValue = new JSONObject(); 
 //		deleteActionValue.put("answerId", questionAndAnswer.getAnswerId());
 //		deleteActionValue.put("questoinAnswerId", questionAndAnswer.getQuestionAnswerId());
@@ -359,7 +367,8 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 				result.put("result", 200);
 				result.put("ok", true);
 				String message = result.toString(); 
-				response.getWriter().write(message); 
+				response.setContentType("text/html");
+				response.setStatus(HttpServletResponse.SC_OK);
 				return; 
 			case "update":
 				org.json.simple.JSONArray payloadActions = (org.json.simple.JSONArray) jsonPayload.get("actions");
@@ -386,9 +395,11 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 					System.out.println("Answer from submission " + editAnswer);
 					answerService.updateByProperties("answerId", editAnswerId, "answer", editAnswer);
 					System.out.println("Updated Answer: " + answerService.get(editAnswerId).getAnswer());
-					mapResponse.put("ok", true);  
+//					mapResponse.put("ok", true);  
+//					response.setStatus(HttpServletResponse.SC_OK);
+					response.setContentType("text/html");
 					response.setStatus(HttpServletResponse.SC_OK);
-					writeJSON(response, mapResponse);
+					return;
 				}
 				break;
 			}
