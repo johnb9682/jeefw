@@ -83,8 +83,9 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 //		result.put("working pregress", "create function Return valid response to slack");
 //		result.put("other", "0.5.9 ");
 //		result.put("working pregress", "delete function with correct response show to user");
-		result.put("other", "0.6.1 ");
+		result.put("other", "0.6.3 ");
 		result.put("working pregress", "Edit function");
+//		result.put("working pregress", "Edit function provide recegnized response");
 //		result.put("other", "0.7.0 ");
 //		result.put("working pregress", "Clean up"); 
 //		delete system
@@ -103,29 +104,29 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 			/* 
 			 * This is a interactive_message. Either delete / edit 
 			 */
-			try {
-				JSONParser parser = new JSONParser();
-				org.json.simple.JSONObject jsonPayload = (org.json.simple.JSONObject) parser.parse(payload);
-				org.json.simple.JSONArray payloadActions = (org.json.simple.JSONArray) jsonPayload.get("actions");
-				System.out.println(payloadActions);
-				org.json.simple.JSONObject payloadActionObject = (org.json.simple.JSONObject) payloadActions.get(0);
-				System.out.println(payloadActionObject);
-				String actionName = (String) payloadActionObject.get("name");
-				System.out.println(actionName);
-				switch (actionName) {
-					case "edit":
-						interactiveMessageEdit(result, jsonPayload);
-						break;
-					case "delete":
-						interactiveMessageDelete(result, jsonPayload);
-						break;
-				} 
-				String message = result.toString();
-				// response.getWriter().write(message); 
-				// return;
-			} catch (ParseException e) { 
-				e.printStackTrace();
-			}   
+//			try {
+//				JSONParser parser = new JSONParser();
+//				org.json.simple.JSONObject jsonPayload = (org.json.simple.JSONObject) parser.parse(payload);
+//				org.json.simple.JSONArray payloadActions = (org.json.simple.JSONArray) jsonPayload.get("actions");
+//				System.out.println(payloadActions);
+//				org.json.simple.JSONObject payloadActionObject = (org.json.simple.JSONObject) payloadActions.get(0);
+//				System.out.println(payloadActionObject);
+//				String actionName = (String) payloadActionObject.get("name");
+//				System.out.println(actionName);
+//				switch (actionName) {
+//					case "edit":
+//						interactiveMessageEdit(result, jsonPayload);
+//						return;  
+//					case "delete":
+//						interactiveMessageDelete(result, jsonPayload);
+//						break;
+//				} 
+//				String message = result.toString();
+//				// response.getWriter().write(message); 
+//				// return;
+//			} catch (ParseException e) { 
+//				e.printStackTrace();
+//			}   
 		} else {
 			JSONArray attachments = new JSONArray();  
 			String inputText = request.getParameter("text"); 
@@ -155,7 +156,9 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 						} 
 					} 
 					result.put("attachments", attachments);
-				}  
+				} else {
+					result.put("text", "No answer matches your question. Please change your question.");
+				}
 			}
 		} 
 		
@@ -229,7 +232,6 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 		// questionAndAnswerService.deleteByProperties("answerId", answerId);
 		result.put("text", "Successful delete one answer. Please ask question again.");
 	}
-	
 	/*
 	 * This is used to respond to the interactive message edit button
 	 */
@@ -237,11 +239,43 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 		System.out.println("jsonPayload: " + jsonPayload);
 		org.json.simple.JSONArray payloadActions = (org.json.simple.JSONArray) jsonPayload.get("actions"); 
 		org.json.simple.JSONObject payloadActionObject = (org.json.simple.JSONObject) payloadActions.get(0); 
-		String targetQuestionId = (String) payloadActionObject.get("value");
-		Long questionId = Long.valueOf (targetQuestionId) ;
-		System.out.println("Edit question for questionId: " + questionId);
+		String targetAnswerId = (String) payloadActionObject.get("value");
+		Long answerId = Long.valueOf (targetAnswerId) ;
+		Answer answer = answerService.get(answerId);
+		System.out.println("Edit answer for answerId: " + answerId);
+		
+		if(answer == null) {
+			return;
+		}
 		
 		// Send a post request to slack to open the dialog 
+	
+		// result.put("result", 200);
+		String trigger_id = (String) jsonPayload.get("trigger_id");
+		String token = (String) jsonPayload.get("token"); 
+		
+		JSONObject dialog = new JSONObject();
+		// I have no choice but doing this ugly code. 
+		// slack submission does not allow me to pass customized parameter
+		dialog.put("callback_id", "editanswersubmit" + answer.getAnswerId());
+		dialog.put("title", "Edit the answer");
+		JSONArray elements = new JSONArray();
+		 
+		JSONObject elementAnswer = new JSONObject(); 
+		elementAnswer.put( "type", "textarea");
+		elementAnswer.put("label", "Edit Answer");
+		elementAnswer.put("name", "answer"); // will be used for create request, included in the payload
+		elementAnswer.put("hint", "Edit answer.");
+		elementAnswer.put("value", answer.getAnswer());
+		elements.add(elementAnswer);
+		dialog.put("elements", elements);  
+		
+		try {
+			sendPost(trigger_id, getJsonObject(dialog));
+		} catch (Exception e) { 
+			e.printStackTrace();
+		}
+		
 	}
 
 	@RequestMapping(value = "/create", method = { RequestMethod.POST})
@@ -275,6 +309,7 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 			System.out.println("questionAndAnswerService: " + questionAndAnswer);
 			result.put("answer", answer);
 			result.put("question", question);
+			result.put("ok", true);
 		} 
 		
 		response.setContentType("application/json");
@@ -301,16 +336,17 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 	@RequestMapping(value = "/update", method = { RequestMethod.POST})
 	public void update(HttpServletRequest request, HttpServletResponse response) throws IOException {  
 		System.out.println("Enter update controller");
-		Map<String, Object> result = new HashMap<String, Object>();
+		Map<String, Object> mapResponse = new HashMap<String, Object>();
 		// result.put("result", 200);
 		String payload = request.getParameter("payload");
 		System.out.println("Payload: " + payload); 
+		JSONObject result = new JSONObject(); 
 		JSONParser parser = new JSONParser();
 		try {
 			org.json.simple.JSONObject jsonPayload = (org.json.simple.JSONObject) parser.parse(payload);   
 			System.out.println("Able to parse JSON: " + jsonPayload);
-			String callback_id = (String) jsonPayload.get("callback_id");
-			 
+			String callback_id = (String) jsonPayload.get("callback_id"); 
+			
 			switch(callback_id) {
 			case "create":
 				String inputAuthor = (String) ((org.json.simple.JSONObject)jsonPayload.get("user")).get("name");
@@ -321,16 +357,39 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 				response.setCharacterEncoding("UTF-8");
 				response.setStatus(HttpServletResponse.SC_OK);
 				result.put("result", 200);
+				result.put("ok", true);
 				String message = result.toString(); 
 				response.getWriter().write(message); 
-				return;
+				return; 
 			case "update":
-				// need existing question id and answer id
-				result.put("result", "In progress");
-				break;
-			case "delete":
-				// need existing question id and answer id
-				result.put("result", "In progress");
+				org.json.simple.JSONArray payloadActions = (org.json.simple.JSONArray) jsonPayload.get("actions");
+				System.out.println(payloadActions);
+				org.json.simple.JSONObject payloadActionObject = (org.json.simple.JSONObject) payloadActions.get(0);
+				System.out.println(payloadActionObject);
+				String actionName = (String) payloadActionObject.get("name");
+				System.out.println(actionName); 
+				switch(actionName){
+				case "edit":
+					interactiveMessageEdit(result, jsonPayload);
+					return;  
+				case "delete":
+					interactiveMessageDelete(result, jsonPayload);
+					break;
+				} 
+				break; 
+			default: 
+				if(callback_id.contains("editanswersubmit")){
+					Long editAnswerId = Long.valueOf(callback_id.replace("editanswersubmit", ""));
+					System.out.println("Answer Id: " + editAnswerId);
+					System.out.println("Origin Answer: " + answerService.get(editAnswerId).getAnswer());
+					String editAnswer = (String) ((org.json.simple.JSONObject)jsonPayload.get("submission")).get("answer"); 
+					System.out.println("Answer from submission " + editAnswer);
+					answerService.updateByProperties("answerId", editAnswerId, "answer", editAnswer);
+					System.out.println("Updated Answer: " + answerService.get(editAnswerId).getAnswer());
+					mapResponse.put("ok", true);  
+					response.setStatus(HttpServletResponse.SC_OK);
+					writeJSON(response, mapResponse);
+				}
 				break;
 			}
 			 
@@ -338,13 +397,24 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 			
 		} catch (ParseException e) { 
 			e.printStackTrace();
-		} 
+		}  
+		
+		result.put("username", "Conan");
+		result.put("mrkdwn", true); 
+		
+		response.setContentType("application/json");
+		response.setCharacterEncoding("UTF-8");
+		response.setStatus(HttpServletResponse.SC_OK);
+		String message = result.toString();
+		response.getWriter().write(message); 
+		System.out.println("Finish the update controller");
 //		response.setStatus(HttpServletResponse.SC_OK);
 //		writeJSON(response, result);
 	} 
 	
-	public Map<String, Object> createQuestionAndAnswer(String inputAuthor, String inputQuestion, String inputAnswer ) {
-		Map<String, Object> result = new HashMap<String, Object>();
+
+	public JSONObject createQuestionAndAnswer(String inputAuthor, String inputQuestion, String inputAnswer ) {
+		JSONObject result = new JSONObject();
 		Date currentDate = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant()); 
 		System.out.println(inputQuestion + "|"+ inputAnswer + "|" + inputAuthor+  "|" + currentDate);
 		if(inputQuestion != null && inputAnswer != null ) {
@@ -415,8 +485,7 @@ public class SlackResponseController extends JavaEEFrameworkBaseController<SysUs
 		
 		try {
 			sendPost(trigger_id, getJsonObject(dialog));
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
+		} catch (Exception e) { 
 			e.printStackTrace();
 		}
 	}
